@@ -1,0 +1,58 @@
+# backtest_config.yaml
+# Defines the backtesting assumptions, cost model, and position sizing rules.
+# All cost values are placeholders and must be calibrated on real market data.
+
+position:
+  sizing: "unit"                  # Options: unit, scaled_by_vol, fixed_notional
+  # unit: long +1, short -1, flat 0
+  # scaled_by_vol: position inversely proportional to realized volatility
+  # fixed_notional: constant EUR notional per trade
+  # TODO: Choose sizing method consistent with your risk budget
+
+  max_position: 1                 # Maximum absolute position size (in units)
+  hold_period: 1                  # Number of periods to hold a position (in bars)
+  signal_lag: 1                   # Lag applied to signal to avoid look-ahead bias
+  # CRITICAL: signal must be lagged by at least 1 period relative to features
+
+  allow_short: true               # Whether short positions are permitted
+  direction_threshold: 0.5       # Probability threshold for binary classification signal
+  # TODO: Sensitivity analysis on this threshold is recommended
+
+transaction_costs:
+  model: "flat_round_trip"        # Options: flat_round_trip, proportional, custom
+  # flat_round_trip: fixed cost per round trip in basis points
+  # proportional: cost proportional to position notional
+
+  commission_bps: 0.5             # PLACEHOLDER: Commission in basis points (one-way)
+  # One basis point = 0.01% of notional
+  # Typical range for liquid futures: 0.2–2 bps per side
+
+  slippage_bps: 0.5              # PLACEHOLDER: Estimated market impact / slippage
+  # Slippage is instrument- and size-dependent — calibrate from market data
+
+  spread_bps: 1.0                 # PLACEHOLDER: Half bid-ask spread in bps
+  # FDAX/FESX are very liquid; realistic spread cost is ~0.5–2 bps
+
+  total_round_trip_bps: 2.0      # Applied on every position change
+  # total = commission + slippage + spread (adjust as needed)
+
+  # TODO: Run sensitivity analysis varying total_round_trip_bps from 0 to 5 bps
+
+performance:
+  risk_free_rate: 0.03            # Annualized; used for Sharpe ratio calculation
+  # TODO: Update with prevailing ECB rate for the period studied
+
+  trading_days_per_year: 252      # Standard for annualization
+
+  metrics:
+    - sharpe_ratio
+    - annualized_return
+    - annualized_volatility
+    - max_drawdown
+    - hit_ratio
+    - turnover
+    - calmar_ratio                # Return / Max Drawdown
+
+equity_curve:
+  initial_capital: 1.0            # Normalized; set to actual EUR notional if desired
+  compound_returns: false         # If true, compound PnL; if false, simple additive

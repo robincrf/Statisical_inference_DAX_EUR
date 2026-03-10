@@ -1,0 +1,65 @@
+# features_config.yaml
+# Controls which features are computed and their parameters.
+# All features are disabled by default; enable only those you have validated.
+
+return_features:
+  log_returns:
+    enabled: true
+    lags: [1, 2, 3, 5, 10]         # Lagged log-return features
+  direction:
+    enabled: true                   # Binary: sign of returns (for classification target)
+
+rolling_volatility:
+  enabled: true
+  windows: [5, 10, 21]             # Rolling standard deviation windows (in periods)
+  annualize: true
+  # TODO: Choose windows appropriate to your signal horizon
+
+momentum:
+  enabled: true
+  windows: [5, 10, 21, 63]         # Rolling momentum (cumulative return over window)
+  # TODO: Avoid short windows that may suffer from microstructure noise
+
+mean_reversion:
+  enabled: true
+  zscore_windows: [10, 21]         # Z-score of close relative to rolling mean
+  # TODO: Evaluate whether these features are stationary
+
+range_features:
+  enabled: true
+  # High-low range normalized by close
+  hl_range: true
+  atr_window: 14                    # Average True Range window
+
+calendar_features:
+  enabled: true
+  day_of_week: true                 # Monday=0, Friday=4 (encoded as int or one-hot)
+  month: true
+  is_month_end: true
+  is_quarter_end: true
+  # NOTE: Calendar features introduce implicit seasonality — validate before using
+
+microstructure_features:
+  enabled: false
+  # TODO: Only activate if intraday data is available
+  # Examples: bid-ask spread proxy, volume imbalance, VWAP deviation
+
+cross_asset_features:
+  enabled: false
+  # TODO: Enable to test cross-signal predictability between FDAX and FESX
+  # Example: spread between FDAX and FESX normalized returns
+
+target:
+  type: "classification"            # Options: classification, regression
+  # classification: predict sign of next return (binary: +1 / -1 or 0)
+  # regression: predict the magnitude of next return
+  horizon: 1                        # Forecast horizon in periods
+  # TODO: Decide whether to use horizon=1 or a multi-step ahead target
+  classification_threshold: 0.0    # Return threshold to define positive class
+  # TODO: Consider using a non-zero threshold to define a "meaningful" move
+
+feature_selection:
+  apply: false
+  # TODO: Enable after initial EDA to reduce noise features
+  method: "correlation"             # Options: correlation, mutual_info, model_based
+  max_features: 20                  # Maximum number of features to retain

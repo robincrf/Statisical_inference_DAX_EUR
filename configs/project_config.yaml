@@ -1,0 +1,37 @@
+# project_config.yaml
+# Global project-level configuration.
+# All values marked with PLACEHOLDER must be updated before running the pipeline.
+
+project:
+  name: "Statistical Inference and ML on DAX and EURO STOXX Futures"
+  version: "0.1.0"
+  author: "PLACEHOLDER"           # TODO: Your name / team
+  institution: "PLACEHOLDER"     # TODO: University / firm
+  created: "2026-03-10"
+  status: "in_progress"           # Options: in_progress, completed
+
+paths:
+  root: "./"
+  data:
+    raw: "data/raw/"
+    interim: "data/interim/"
+    processed: "data/processed/"
+    external: "data/external/"
+  notebooks: "notebooks/"
+  src: "src/"
+  reports: "reports/"
+  figures: "reports/figures/"
+  tables: "reports/tables/"
+  configs: "configs/"
+  experiments: "experiments/"
+  logs: "logs/"
+
+logging:
+  level: "INFO"                   # Options: DEBUG, INFO, WARNING, ERROR
+  log_to_file: true
+  log_file: "logs/pipeline.log"
+
+random_seed: 42                   # For reproducibility
+
+frequency: "daily"                # Options: daily, intraday_60min, intraday_5min
+# TODO: Select the resolution that matches your data source

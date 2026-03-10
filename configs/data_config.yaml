@@ -1,0 +1,56 @@
+# data_config.yaml
+# Controls data ingestion: tickers, file formats, date ranges, frequency.
+# All PLACEHOLDER values must be set before running src/data/load_data.py.
+
+assets:
+  - ticker: "FDAX"
+    full_name: "DAX Futures (Front Month)"
+    exchange: "Eurex"
+    currency: "EUR"
+    file: "PLACEHOLDER"           # TODO: Relative path to raw data file
+    format: "csv"                  # Options: csv, parquet, excel
+
+  - ticker: "FESX"
+    full_name: "EURO STOXX 50 Futures (Front Month)"
+    exchange: "Eurex"
+    currency: "EUR"
+    file: "PLACEHOLDER"           # TODO: Relative path to raw data file
+    format: "csv"
+
+date_range:
+  start: "PLACEHOLDER"            # TODO: e.g., "2015-01-01"
+  end: "PLACEHOLDER"              # TODO: e.g., "2024-12-31"
+
+columns:
+  # Expected column names in the raw files. Adjust if your source uses different names.
+  datetime: "datetime"
+  open: "open"
+  high: "high"
+  low: "low"
+  close: "close"
+  volume: "volume"              # Set to null if volume is not available
+  # volume: null
+
+frequency:
+  input: "PLACEHOLDER"          # TODO: Actual frequency of raw data, e.g., "1min", "1D"
+  target: "1D"                  # Target frequency for modeling (resample if needed)
+  # TODO: Decide whether to work at daily or intraday granularity
+
+timezone:
+  input: "Europe/Berlin"        # Timezone of raw data timestamps
+  output: "UTC"                 # Normalize all data to UTC for consistency
+
+session_filter:
+  active: false
+  # TODO: If working with intraday data, define the trading session to keep
+  start_time: "08:00"           # e.g., Eurex equity futures open
+  end_time: "22:00"             # e.g., Eurex equity futures close
+
+splits:
+  # Strict temporal separation — no shuffling allowed
+  train_start: "PLACEHOLDER"    # TODO: e.g., "2015-01-01"
+  train_end: "PLACEHOLDER"      # TODO: e.g., "2020-12-31"
+  val_start: "PLACEHOLDER"      # TODO: e.g., "2021-01-01"
+  val_end: "PLACEHOLDER"        # TODO: e.g., "2022-12-31"
+  test_start: "PLACEHOLDER"     # TODO: e.g., "2023-01-01"
+  test_end: "PLACEHOLDER"       # TODO: e.g., "2024-12-31"

@@ -1,0 +1,73 @@
+# models_config.yaml
+# Defines model types, hyperparameter search spaces, and pipeline settings.
+# All model hyperparameters are placeholders — tune empirically.
+
+task_type: "classification"     # Options: classification, regression
+# TODO: Align with target.type in features_config.yaml
+
+baselines:
+  naive_directional:
+    enabled: true
+    # Always predict the majority class (or previous direction)
+
+  linear_regression:
+    enabled: true
+    fit_intercept: true
+
+  logistic_regression:
+    enabled: true
+    penalty: "l2"
+    C: 1.0                        # Inverse regularization strength
+    max_iter: 1000
+    solver: "lbfgs"
+    # TODO: Run a grid search on C over log-scale
+
+ml_models:
+  random_forest:
+    enabled: true
+    n_estimators: 100             # PLACEHOLDER — tune in validation
+    max_depth: null               # null = unlimited (risk of overfitting)
+    min_samples_leaf: 20         # Conservative to limit overfitting
+    max_features: "sqrt"
+    n_jobs: -1
+    random_state: 42
+    # TODO: Use walk-forward + RandomizedSearchCV to tune
+
+  gradient_boosting:
+    enabled: false                # TODO: Enable if you want to test GBM
+    n_estimators: 200
+    learning_rate: 0.05
+    max_depth: 3                  # Keep shallow for financial data
+    subsample: 0.8
+    random_state: 42
+
+  xgboost:
+    enabled: false                # TODO: Enable after baseline is stable
+    n_estimators: 200
+    learning_rate: 0.05
+    max_depth: 3
+    colsample_bytree: 0.8
+    subsample: 0.8
+    use_label_encoder: false
+    eval_metric: "logloss"       # For classification
+    random_state: 42
+
+  svm:
+    enabled: false                # TODO: Computationally expensive; use with care
+    kernel: "rbf"
+    C: 1.0
+    gamma: "scale"
+
+training:
+  scaling:
+    apply: true
+    method: "standard"            # Options: standard, minmax, robust
+    # Use standard for most linear models; robust for heavy-tailed data
+
+  class_weight: "balanced"        # For imbalanced directional targets
+  # TODO: Evaluate whether your dataset is imbalanced before applying
+
+  cross_validation:
+    method: "walk_forward"        # Options: walk_forward, expanding_window
+    n_splits: 5                   # Number of out-of-sample folds
+    # TODO: Defined in detail in walk_forward.py
