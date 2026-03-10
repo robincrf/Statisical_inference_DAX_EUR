@@ -1,6 +1,14 @@
 # backtest_config.yaml
 # Defines the backtesting assumptions, cost model, and position sizing rules.
-# All cost values are placeholders and must be calibrated on real market data.
+# Assets: ^GDAXI (DAX Index) and ^STOXX50E (EURO STOXX 50 Index) from Yahoo Finance.
+#
+# NOTE: Since we use index price series (not futures), cost modeling is approximate.
+# The index itself is not directly tradable. In practice, replication would use:
+#   - ETFs (e.g., iShares Core DAX, Xtrackers EURO STOXX 50)
+#   - CFDs / spread bets
+#   - Futures (for reference, see original futures config)
+# Cost assumptions below reflect realistic ETF or index CFD execution.
+# TODO: Adjust based on your assumed replication vehicle.
 
 position:
   sizing: "unit"                  # Options: unit, scaled_by_vol, fixed_notional

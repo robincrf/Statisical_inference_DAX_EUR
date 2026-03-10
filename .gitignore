@@ -1,0 +1,79 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+.conda/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+**/.ipynb_checkpoints
+
+# Data — raw and processed data files are NOT committed
+# (unless they are small, non-proprietary, and explicitly approved)
+data/raw/*.csv
+data/raw/*.parquet
+data/raw/*.xlsx
+data/raw/*.hdf5
+data/interim/*.csv
+data/interim/*.parquet
+data/processed/*.csv
+data/processed/*.parquet
+data/external/*.csv
+
+# Allow the data README
+!data/README.md
+
+# Reports — figures and tables are generated, not tracked
+reports/figures/*.png
+reports/figures/*.pdf
+reports/figures/*.svg
+reports/tables/*.csv
+reports/tables/*.tex
+
+# Logs
+logs/
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Testing / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+coverage.xml
+
+# MyPy / type checking
+.mypy_cache/
+.dmypy.json
+
+# Distribution
+*.spec
+
+# MLflow / experiment tracking (optional)
+mlruns/
+mlartifacts/

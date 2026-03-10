@@ -1,56 +1,55 @@
 # data_config.yaml
-# Controls data ingestion: tickers, file formats, date ranges, frequency.
-# All PLACEHOLDER values must be set before running src/data/load_data.py.
+# Controls data ingestion from Yahoo Finance for DAX and EURO STOXX 50 indices.
 
 assets:
-  - ticker: "FDAX"
-    full_name: "DAX Futures (Front Month)"
-    exchange: "Eurex"
+  - ticker: "^GDAXI"
+    label: "DAX"
+    full_name: "DAX Performance Index"
+    exchange: "XETRA"
     currency: "EUR"
-    file: "PLACEHOLDER"           # TODO: Relative path to raw data file
-    format: "csv"                  # Options: csv, parquet, excel
+    source: "yfinance"
 
-  - ticker: "FESX"
-    full_name: "EURO STOXX 50 Futures (Front Month)"
-    exchange: "Eurex"
+  - ticker: "^STOXX50E"
+    label: "STOXX50"
+    full_name: "EURO STOXX 50 Index"
+    exchange: "Euronext / Multiple"
     currency: "EUR"
-    file: "PLACEHOLDER"           # TODO: Relative path to raw data file
-    format: "csv"
+    source: "yfinance"
 
 date_range:
-  start: "PLACEHOLDER"            # TODO: e.g., "2015-01-01"
-  end: "PLACEHOLDER"              # TODO: e.g., "2024-12-31"
-
-columns:
-  # Expected column names in the raw files. Adjust if your source uses different names.
-  datetime: "datetime"
-  open: "open"
-  high: "high"
-  low: "low"
-  close: "close"
-  volume: "volume"              # Set to null if volume is not available
-  # volume: null
+  start: "2010-01-01"             # PLACEHOLDER — adjust to your study window
+  end: "2024-12-31"               # PLACEHOLDER — adjust as needed
+  # TODO: Ensure start date captures at least 3–5 years of training data
 
 frequency:
-  input: "PLACEHOLDER"          # TODO: Actual frequency of raw data, e.g., "1min", "1D"
-  target: "1D"                  # Target frequency for modeling (resample if needed)
-  # TODO: Decide whether to work at daily or intraday granularity
+  target: "1D"                    # Daily bars from Yahoo Finance (adjusted close)
+  # NOTE: Yahoo Finance provides daily OHLCV for index tickers
+  # Intraday data is NOT available for indices on free Yahoo Finance API
+
+columns:
+  # Yahoo Finance standard column names (returned by yf.download)
+  datetime: "Date"
+  open: "Open"
+  high: "High"
+  low: "Low"
+  close: "Adj Close"             # Use Adj Close for indices (splits/div adjusted)
+  volume: "Volume"               # Volume is typically not meaningful for indices
+  # NOTE: For ^GDAXI and ^STOXX50E, volume = 0 or NaN — treat as unavailable
 
 timezone:
-  input: "Europe/Berlin"        # Timezone of raw data timestamps
-  output: "UTC"                 # Normalize all data to UTC for consistency
-
-session_filter:
-  active: false
-  # TODO: If working with intraday data, define the trading session to keep
-  start_time: "08:00"           # e.g., Eurex equity futures open
-  end_time: "22:00"             # e.g., Eurex equity futures close
+  output: "UTC"
 
 splits:
-  # Strict temporal separation — no shuffling allowed
-  train_start: "PLACEHOLDER"    # TODO: e.g., "2015-01-01"
-  train_end: "PLACEHOLDER"      # TODO: e.g., "2020-12-31"
-  val_start: "PLACEHOLDER"      # TODO: e.g., "2021-01-01"
-  val_end: "PLACEHOLDER"        # TODO: e.g., "2022-12-31"
-  test_start: "PLACEHOLDER"     # TODO: e.g., "2023-01-01"
-  test_end: "PLACEHOLDER"       # TODO: e.g., "2024-12-31"
+  # Strict temporal separation — no shuffling, no overlap
+  train_start: "2010-01-01"      # PLACEHOLDER
+  train_end: "2019-12-31"        # PLACEHOLDER
+  val_start: "2020-01-01"        # PLACEHOLDER
+  val_end: "2021-12-31"          # PLACEHOLDER
+  test_start: "2022-01-01"       # PLACEHOLDER
+  test_end: "2024-12-31"         # PLACEHOLDER
+  # TODO: Adjust splits so each split has a meaningful number of trading days
+  # Recommended: train ≥ 5 years, val ≥ 1 year, test ≥ 1 year
+
+data_cache:
+  enabled: true
+  path: "data/raw/"              # Downloaded files saved as Parquet for reuse

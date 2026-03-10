@@ -1,233 +1,252 @@
 """
 load_data.py
 ============
-Data ingestion module for the DAX/EURO STOXX Futures research project.
+Data ingestion module for the DAX / EURO STOXX 50 research project.
+
+Data source: Yahoo Finance via the `yfinance` library.
+Tickers: ^GDAXI (DAX Performance Index) and ^STOXX50E (EURO STOXX 50 Index).
 
 Responsibilities:
-- Loading raw OHLCV data from flat files (CSV, Parquet)
+- Downloading OHLCV data from Yahoo Finance
+- Caching raw downloads locally as Parquet to avoid repeated API calls
 - Standardizing column names and data types
-- Parsing and validating timestamps
-- Sorting chronologically and enforcing a unique datetime index
-- Basic structural validation (shape, expected columns, date range)
+- Converting to UTC DatetimeIndex, sorting chronologically
+- Basic structural validation
 
 Usage:
-    from src.data.load_data import load_raw_data, validate_structure
-    df = load_raw_data("data/raw/FDAX_1d_20150101_20241231.csv", ticker="FDAX")
+    from src.data.load_data import download_index_data, load_all_assets
+    df = download_index_data("^GDAXI", start="2010-01-01", end="2024-12-31")
 """
 
 import logging
 from pathlib import Path
-from typing import Optional
+from typing import Dict, Optional
 
 import pandas as pd
+import numpy as np
 
 logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
-# Column mapping
+# Yahoo Finance downloader
 # ---------------------------------------------------------------------------
 
-STANDARD_COLUMNS = ["open", "high", "low", "close", "volume"]
-
-DEFAULT_COLUMN_MAP = {
-    # Add your raw file column names here if they differ from standard
-    # e.g. "Close": "close", "Date": "datetime"
-}
-
-
-# ---------------------------------------------------------------------------
-# Core loading function
-# ---------------------------------------------------------------------------
-
-def load_raw_data(
-    filepath: str,
+def download_index_data(
     ticker: str,
-    datetime_col: str = "datetime",
-    column_map: Optional[dict] = None,
-    tz_input: str = "Europe/Berlin",
-    tz_output: str = "UTC",
-    file_format: str = "csv",
-    sep: str = ",",
-    decimal: str = ".",
+    start: str,
+    end: str,
+    cache_path: Optional[str] = None,
+    force_download: bool = False,
+    label: Optional[str] = None,
 ) -> pd.DataFrame:
     """
-    Load raw OHLCV data from a flat file and return a standardized DataFrame.
+    Download daily OHLCV data for an index ticker from Yahoo Finance.
+
+    Uses `Adj Close` as the close price (adjusted for dividends and splits,
+    although index tickers are typically unadjusted).
+
+    Data is cached locally as Parquet on first download to avoid repeated
+    API calls. Use `force_download=True` to bypass the cache.
 
     Parameters
     ----------
-    filepath : str
-        Absolute or relative path to the raw data file.
     ticker : str
-        Asset identifier, e.g. "FDAX" or "FESX". Appended as a column.
-    datetime_col : str
-        Name of the datetime column in the raw file.
-    column_map : dict, optional
-        Mapping from raw column names to standard names. Defaults to DEFAULT_COLUMN_MAP.
-    tz_input : str
-        Timezone of the raw timestamps. Use "UTC" if already in UTC.
-    tz_output : str
-        Target timezone for the output DataFrame index (typically UTC).
-    file_format : str
-        Format of the raw file. Options: "csv", "parquet".
-    sep : str
-        CSV field separator.
-    decimal : str
-        Decimal separator.
+        Yahoo Finance ticker symbol, e.g. "^GDAXI" or "^STOXX50E".
+    start : str
+        Start date in "YYYY-MM-DD" format (inclusive).
+    end : str
+        End date in "YYYY-MM-DD" format (inclusive).
+    cache_path : str, optional
+        Directory to save/load cached Parquet files. If None, no caching.
+    force_download : bool
+        If True, re-download even if a local cache file exists.
+    label : str, optional
+        Human-readable label for logging. Defaults to ticker.
 
     Returns
     -------
     pd.DataFrame
-        Standardized DataFrame with a DatetimeIndex and columns:
+        DataFrame with UTC DatetimeIndex and standardized columns:
         [open, high, low, close, volume, ticker].
-        Volume column may be NaN if not present in source.
 
     Raises
     ------
-    FileNotFoundError
-        If the file does not exist at `filepath`.
+    ImportError
+        If `yfinance` is not installed.
     ValueError
-        If required columns are missing after applying the column map.
+        If the downloaded DataFrame is empty (invalid ticker or date range).
     """
-    path = Path(filepath)
-    if not path.exists():
-        raise FileNotFoundError(f"Data file not found: {filepath}")
-
-    logger.info(f"Loading {ticker} data from {filepath}")
-
-    # --- Load raw file ---
-    if file_format == "csv":
-        df = pd.read_csv(path, sep=sep, decimal=decimal, low_memory=False)
-    elif file_format == "parquet":
-        df = pd.read_parquet(path)
-    else:
-        raise ValueError(f"Unsupported file format: {file_format}. Use 'csv' or 'parquet'.")
-
-    # --- Apply column mapping ---
-    col_map = column_map if column_map is not None else DEFAULT_COLUMN_MAP
-    if col_map:
-        df.rename(columns=col_map, inplace=True)
-
-    logger.debug(f"Raw columns after mapping: {list(df.columns)}")
-
-    # --- Parse datetime ---
-    if datetime_col not in df.columns:
-        raise ValueError(
-            f"Datetime column '{datetime_col}' not found. Available: {list(df.columns)}"
+    try:
+        import yfinance as yf
+    except ImportError:
+        raise ImportError(
+            "yfinance is not installed. Run: pip install yfinance"
         )
-    df[datetime_col] = pd.to_datetime(df[datetime_col], utc=False)
 
-    # --- Localize and convert timezone ---
-    # TODO: Adjust tz_input if your raw data already contains tz-aware timestamps
-    if df[datetime_col].dt.tz is None:
-        df[datetime_col] = df[datetime_col].dt.tz_localize(tz_input, ambiguous="infer")
-    df[datetime_col] = df[datetime_col].dt.tz_convert(tz_output)
+    label = label or ticker
+    safe_name = ticker.replace("^", "").replace(".", "_")
 
-    # --- Set datetime index ---
-    df.set_index(datetime_col, inplace=True)
-    df.index.name = "datetime"
+    # --- Check cache ---
+    cache_file = None
+    if cache_path is not None:
+        cache_dir = Path(cache_path)
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        cache_file = cache_dir / f"{safe_name}_{start}_{end}.parquet"
+
+        if cache_file.exists() and not force_download:
+            logger.info(f"[{label}] Loading from cache: {cache_file}")
+            df = pd.read_parquet(cache_file)
+            return df
+
+    # --- Download from Yahoo Finance ---
+    logger.info(f"[{label}] Downloading {ticker} from Yahoo Finance ({start} → {end})...")
+    raw = yf.download(ticker, start=start, end=end, auto_adjust=False, progress=False)
+
+    if raw.empty:
+        raise ValueError(
+            f"No data returned for ticker '{ticker}' between {start} and {end}. "
+            "Check that the ticker is valid and the date range is correct."
+        )
+
+    # --- Flatten MultiIndex columns (yfinance ≥0.2 may return MultiIndex) ---
+    if isinstance(raw.columns, pd.MultiIndex):
+        raw.columns = [col[0] for col in raw.columns]
+
+    # --- Normalize column names ---
+    col_map = {
+        "Open": "open",
+        "High": "high",
+        "Low": "low",
+        "Close": "close",
+        "Adj Close": "adj_close",
+        "Volume": "volume",
+    }
+    raw.rename(columns=col_map, inplace=True)
+
+    # Use Adj Close as the working close price for indices
+    if "adj_close" in raw.columns:
+        raw["close"] = raw["adj_close"]
+        raw.drop(columns=["adj_close"], inplace=True)
+
+    # --- Standardize index ---
+    raw.index = pd.to_datetime(raw.index)
+    if raw.index.tz is None:
+        raw.index = raw.index.tz_localize("UTC")
+    else:
+        raw.index = raw.index.tz_convert("UTC")
+    raw.index.name = "datetime"
 
     # --- Sort chronologically ---
-    df.sort_index(inplace=True)
+    raw.sort_index(inplace=True)
 
-    # --- Standardize floats ---
-    for col in ["open", "high", "low", "close"]:
-        if col in df.columns:
-            df[col] = pd.to_numeric(df[col], errors="coerce")
+    # --- Handle volume (meaningless for index tickers) ---
+    if "volume" in raw.columns:
+        if raw["volume"].sum() == 0 or raw["volume"].isna().all():
+            logger.info(f"[{label}] Volume column is zero/NaN (expected for index). Setting to NaN.")
+            raw["volume"] = np.nan
 
-    # --- Volume: make optional ---
-    if "volume" not in df.columns:
-        logger.warning(f"No 'volume' column found for {ticker}. Filling with NaN.")
-        df["volume"] = float("nan")
-    else:
-        df["volume"] = pd.to_numeric(df["volume"], errors="coerce")
+    # --- Tag with ticker ---
+    raw["ticker"] = ticker
 
-    # --- Add ticker identifier ---
-    df["ticker"] = ticker
+    # --- Drop completely empty rows ---
+    raw.dropna(subset=["open", "high", "low", "close"], how="all", inplace=True)
 
-    logger.info(f"Loaded {len(df)} rows for {ticker}. Range: {df.index[0]} → {df.index[-1]}")
-    return df
+    logger.info(
+        f"[{label}] Downloaded {len(raw)} rows. "
+        f"Range: {raw.index[0].date()} → {raw.index[-1].date()}"
+    )
 
+    # --- Cache to disk ---
+    if cache_file is not None:
+        raw.to_parquet(cache_file)
+        logger.info(f"[{label}] Cached to {cache_file}")
 
-# ---------------------------------------------------------------------------
-# Structural validation
-# ---------------------------------------------------------------------------
-
-def validate_structure(df: pd.DataFrame, ticker: str) -> None:
-    """
-    Perform basic structural validation on the loaded DataFrame.
-
-    Checks:
-    - DatetimeIndex is present and monotonically increasing
-    - Required price columns are present
-    - No entirely-null price columns
-
-    Parameters
-    ----------
-    df : pd.DataFrame
-        DataFrame returned by `load_raw_data`.
-    ticker : str
-        Asset identifier for logging purposes.
-
-    Raises
-    ------
-    TypeError
-        If the index is not a DatetimeIndex.
-    ValueError
-        If required columns are missing or data is entirely null.
-    """
-    if not isinstance(df.index, pd.DatetimeIndex):
-        raise TypeError(f"[{ticker}] Index must be a DatetimeIndex.")
-
-    if not df.index.is_monotonic_increasing:
-        raise ValueError(f"[{ticker}] DatetimeIndex is not monotonically increasing.")
-
-    required = ["open", "high", "low", "close"]
-    missing = [c for c in required if c not in df.columns]
-    if missing:
-        raise ValueError(f"[{ticker}] Missing required columns: {missing}")
-
-    for col in required:
-        if df[col].isna().all():
-            raise ValueError(f"[{ticker}] Column '{col}' is entirely null.")
-
-    logger.info(f"[{ticker}] Structural validation passed.")
+    return raw
 
 
 # ---------------------------------------------------------------------------
 # Multi-asset loader
 # ---------------------------------------------------------------------------
 
-def load_multiple_assets(asset_configs: list) -> dict:
+def load_all_assets(cfg: dict) -> Dict[str, pd.DataFrame]:
     """
-    Load and validate data for multiple assets from a list of config dicts.
+    Load all assets defined in data_config.yaml from Yahoo Finance.
+
+    Uses the caching mechanism in `download_index_data`.
 
     Parameters
     ----------
-    asset_configs : list of dict
-        Each dict must contain at minimum: {"ticker": str, "file": str, "format": str}.
-        Additional keys are passed to `load_raw_data`.
+    cfg : dict
+        Full data configuration dict loaded from `data_config.yaml`.
 
     Returns
     -------
     dict
-        Dictionary mapping ticker → pd.DataFrame.
+        Mapping of ticker symbol → standardized pd.DataFrame.
 
     Example
     -------
-    >>> configs = [
-    ...     {"ticker": "FDAX", "file": "data/raw/fdax.csv", "format": "csv"},
-    ...     {"ticker": "FESX", "file": "data/raw/fesx.csv", "format": "csv"},
-    ... ]
-    >>> data = load_multiple_assets(configs)
+    >>> from src.utils.config import load_config
+    >>> from src.data.load_data import load_all_assets
+    >>> cfg = load_config("configs/data_config.yaml")
+    >>> datasets = load_all_assets(cfg)
+    >>> df_dax = datasets["^GDAXI"]
     """
-    # TODO: Populate asset_configs from data_config.yaml at runtime
+    start = cfg["date_range"]["start"]
+    end = cfg["date_range"]["end"]
+    cache_path = cfg.get("data_cache", {}).get("path", None) \
+        if cfg.get("data_cache", {}).get("enabled", False) else None
+
     datasets = {}
-    for cfg in asset_configs:
-        ticker = cfg.pop("ticker")
-        filepath = cfg.pop("file")
-        file_format = cfg.pop("format", "csv")
-        df = load_raw_data(filepath, ticker=ticker, file_format=file_format, **cfg)
-        validate_structure(df, ticker)
+    for asset in cfg["assets"]:
+        ticker = asset["ticker"]
+        label = asset.get("label", ticker)
+        df = download_index_data(
+            ticker=ticker,
+            start=start,
+            end=end,
+            cache_path=cache_path,
+            label=label,
+        )
+        validate_structure(df, label)
         datasets[ticker] = df
+
     return datasets
+
+
+# ---------------------------------------------------------------------------
+# Structural validation
+# ---------------------------------------------------------------------------
+
+def validate_structure(df: pd.DataFrame, label: str) -> None:
+    """
+    Perform basic structural validation on a loaded DataFrame.
+
+    Checks:
+    - DatetimeIndex present and monotonically increasing
+    - Required columns present and not entirely null
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+    label : str
+        Asset label for logging.
+
+    Raises
+    ------
+    TypeError / ValueError on validation failure.
+    """
+    if not isinstance(df.index, pd.DatetimeIndex):
+        raise TypeError(f"[{label}] Index must be a DatetimeIndex.")
+
+    if not df.index.is_monotonic_increasing:
+        raise ValueError(f"[{label}] DatetimeIndex is not monotonically increasing.")
+
+    for col in ["open", "high", "low", "close"]:
+        if col not in df.columns:
+            raise ValueError(f"[{label}] Missing required column: '{col}'.")
+        if df[col].isna().all():
+            raise ValueError(f"[{label}] Column '{col}' is entirely null.")
+
+    logger.info(f"[{label}] Structural validation passed. {len(df)} rows.")

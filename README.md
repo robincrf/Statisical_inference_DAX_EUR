@@ -35,12 +35,12 @@ The work follows a rigorous **quantitative research methodology**: baseline stat
 
 ## Assets Studied
 
-| Asset | Full Name | Exchange | Denomination |
+| Ticker | Full Name | Source | Frequency |
 |---|---|---|---|
-| FDAX | DAX Futures | Eurex | EUR |
-| FESX | EURO STOXX 50 Futures | Eurex | EUR |
+| `^GDAXI` | DAX Performance Index | Yahoo Finance (`yfinance`) | Daily |
+| `^STOXX50E` | EURO STOXX 50 Index | Yahoo Finance (`yfinance`) | Daily |
 
-Both contracts are among the most liquid European equity index futures, with tight spreads and high notional volume, making them suitable candidates for systematic strategy research.
+Both series are **cash equity indices** (not derivatives) downloaded via the `yfinance` Python library. They serve as proxies for systematic signal research; real-world execution would require a replication vehicle (index ETF, CFD, or futures). Volume data for these tickers is not meaningful and is treated as unavailable.
 
 ---
 
